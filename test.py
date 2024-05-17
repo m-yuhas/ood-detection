@@ -1,6 +1,9 @@
 import argparse
 import pytorch_lightning
 import torch
+import numpy
+
+from sklearn.metrics import roc_auc_score
 
 from models.vggnet import VggnetWsvae, VggnetVae
 from data.image_data import OodDataModule
@@ -19,6 +22,7 @@ if __name__ == '__main__':
         '--model_name',
         help='file name of *.pt model'
     )
+    args = parser.parse_args()
     model = torch.load(args.model_name)
     data = OodDataModule(args.test_dataset, args.test_dataset, args.test_dataset, args.test_dataset, batch_size=int(args.batch)) 
     trainer = pytorch_lightning.Trainer(
@@ -30,5 +34,14 @@ if __name__ == '__main__':
         logger=pytorch_lightning.loggers.TensorBoardLogger(save_dir='logs/'),
         enable_checkpointing=False,
     )
-    trainer.fit(model, datamodule=data)
-    torch.save(model, f'{args.name}.pt')
+    num_imgs = len(data.val_dataloader().dataset)
+    ood_score = numpy.zeros(num_imgs)
+    gt = numpy.zeros(num_imgs)
+    results = trainer.predict(model, datamodule=data)
+    for idx, r in enumerate(results):
+        ood_score[idx * int(args.batch):(idx + 1) * int(args.batch)] = r[0]
+        gt[idx * int(args.batch):(idx + 1) * int(args.batch)] = r[1]
+    gt[gt <= 4] = 0
+    gt[gt > 4] = 1
+    auroc = roc_auc_score(gt, ood_score)
+    print(f'AUROC: {auroc}')

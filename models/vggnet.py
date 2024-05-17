@@ -522,7 +522,8 @@ class VggnetWsvae(pytorch_lightning.LightningModule):
 
     def test_step(self, test_batch, batch_idx):
         x, y = test_batch
-        mu, logvar = self.encoder(x)
+        l = self.enc_head(self.encoder(x))
+        mu, logvar = l[:, :l.shape[-1] // 2], l[:, l.shape[-1] // 2:]
         #kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
         #self.log('dkl', kl_loss)
         self.log('oodscore', mu[:,0])
@@ -531,6 +532,7 @@ class VggnetWsvae(pytorch_lightning.LightningModule):
 
     def predict_step(self, predict_batch, batch_idx):
         x, y = predict_batch
-        mu, logvar = self.encoder(x)
+        l = self.enc_head(self.encoder(x))
+        mu, logvar = l[:, :l.shape[-1] // 2], l[:, l.shape[-1] // 2:]
         #kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
         return mu[:, 0], y
