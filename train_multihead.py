@@ -7,6 +7,7 @@ import torchvision
 
 from models.vggnet import * 
 from models.vggnet_multihead import VggnetWsvaeMultiHead
+from data.image_data import OodDataModule
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Train a VGGNet Early-Exit')

@@ -188,13 +188,13 @@ class VggnetWsvaeMultiHead(pytorch_lightning.LightningModule):
 
     def __init__(self, base_model, learning_rate=1e-5):
         super().__init__()
-        self.beta = base_model.beta
-        self.alpha = base_model.alpha
-        self.gamma = base_model.gamma
-        self.n_latent = base_model.n_latent
-        self.levels = base_model.levels
-        self.learning_rate = learning_rate
         m = torch.load(base_model)
+        self.beta = m.beta
+        self.alpha = m.alpha
+        self.gamma = m.gamma
+        self.n_latent = m.n_latent
+        self.levels = m.levels
+        self.learning_rate = learning_rate
         self.encoder = m.encoder
         self.decoder = m.decoder
         for param in self.encoder.parameters():
@@ -264,35 +264,35 @@ class VggnetWsvaeMultiHead(pytorch_lightning.LightningModule):
         y0 = self.encoder.block0_quant(x)
         y0 = self.encoder.block0(y0)
         y0 = self.encoder.block0_dequant(y0)
-        y0 = self.enc_head0(self.pool0(y0))
-        mu0, logvar0 = y0[:, :y0.shape[-1] // 2], y0[:, y0.shape[-1] // 2:]
-        y0 = self.cls_head0(torch.unsqueeze(mu0[:, 0], 1))
+        l0 = self.enc_head0(self.pool0(y0))
+        mu0, logvar0 = l0[:, :l0.shape[-1] // 2], l0[:, l0.shape[-1] // 2:]
+        l0 = self.cls_head0(torch.unsqueeze(mu0[:, 0], 1))
 
         y1 = self.encoder.block1_quant(y0)
         y1 = self.encoder.block1(y1)
         y1 = self.encoder.block1_dequant(y1)
-        y1 = self.enc_head0(self.pool0(y1))
-        mu1, logvar1 = y1[:, :y1.shape[-1] // 2], y0[:, y1.shape[-1] // 2:]
-        y1 = self.cls_head1(torch.unsqueeze(mu1[:, 0], 1))
+        l1 = self.enc_head0(self.pool1(y1))
+        mu1, logvar1 = l1[:, :l1.shape[-1] // 2], l1[:, l1.shape[-1] // 2:]
+        l1 = self.cls_head1(torch.unsqueeze(mu1[:, 0], 1))
 
         y2 = self.encoder.block2_quant(y1)
         y2 = self.encoder.block2(y2)
         y2 = self.encoder.block2_dequant(y2)
-        y2 = self.enc_head0(self.pool0(y2))
-        mu2, logvar2 = y2[:, :y2.shape[-1] // 2], y2[:, y2.shape[-1] // 2:]
-        y2 = self.cls_head2(torch.unsqueeze(mu2[:, 0], 1))
+        l2 = self.enc_head0(self.pool2(y2))
+        mu2, logvar2 = l2[:, :l2.shape[-1] // 2], l2[:, l2.shape[-1] // 2:]
+        l2 = self.cls_head2(torch.unsqueeze(mu2[:, 0], 1))
 
         y3 = self.encoder.block3_quant(y2)
         y3 = self.encoder.block3(y3)
         y3 = self.encoder.block3_dequant(y3)
-        y3 = self.enc_head4(self.pool4(y3))
-        mu3, logvar3 = y3[:, :y3.shape[-1] // 2], y3[:, y3.shape[-1] // 2:]
-        y3 = self.cls_head3(torch.unsqueeze(mu3[:, 0], 1))
+        l3 = self.enc_head4(self.pool3(y3))
+        mu3, logvar3 = l3[:, :l3.shape[-1] // 2], l3[:, l3.shape[-1] // 2:]
+        l3 = self.cls_head3(torch.unsqueeze(mu3[:, 0], 1))
 
         #y4 = self.block4_quant(y3)
         #y4 = self.block4(y4)
         #y4 = self.block4_dequant(y4)
-        return [mu0, mu1, mu2, mu3], [logvar0, logvar1, logvar2, logvar3], [y0, y1, y2, y3]
+        return [mu0, mu1, mu2, mu3], [logvar0, logvar1, logvar2, logvar3], [l0, l1, l2, l3]
 
     def forward_dec(self, z0, z1, z2, z3):
         y0 = self.dec_head0(z0)
