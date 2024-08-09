@@ -3,10 +3,12 @@ import pytorch_lightning
 import torch
 
 from models.vggnet import VggnetWsvae, VggnetVae
+from models.resnet import Resnet18Enc, Resnet18Dec
+from lightning_modules.betavae import BetaVae
 from data.image_data import OodDataModule
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Train a VGGNet')
+    parser = argparse.ArgumentParser('Train an OOD detector')
     parser.add_argument(
         '--train_dataset',
         help='Path to folder of training images'
@@ -28,21 +30,18 @@ if __name__ == '__main__':
         help='Experiment Name'
     )
     parser.add_argument(
-        '--n_layers',
-        help='No. layers (11, 13, 16, or 19)'
+        '--backbone',
+        help='resnet18, resnet34'
     )
     parser.add_argument(
         '--n_latent',
         help='n_latent'
     )
     args = parser.parse_args()
-    model = VggnetWsvae(
-        depth=int(args.n_layers),
-        n_latent=int(args.n_latent),
-        levels=5,
-        alpha=1,
+    model = BetaVae(
+        encoder=Resnet18Enc(),
+        decoder=Resnet18Dec(),
         beta=1,
-        gamma=1,
         learning_rate=1e-5
     )
     data = OodDataModule(args.train_dataset, args.val_dataset, None, None, batch_size=int(args.batch)) 
