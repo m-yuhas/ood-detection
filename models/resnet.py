@@ -3,6 +3,8 @@
 K. He, X. Zhang, S. Ren, and J. Sun, ``Deep Residual Learning for Image
 Recognition,'' 2016 IEEE Conference on Computer Vision and Pattern Recognition
 (CVPR), Las Vegas, NV, USA, 2016, pp. 770--778, doi: 10.1109/CVPR.2016.90.
+
+# TODO remember to add zero pad option for skip layers going from few to many channels
 """
 
 
@@ -38,11 +40,10 @@ class ResnetEncBlock(torch.nn.Module):
         self.act2 = torch.nn.ReLU()
 
         self.conv3 = torch.nn.Conv2d(mid_channels, out_channels, 1, padding=0)
-        self.bn3 = torch.nn.BatchNorm2d(out_channels)
-        self.act3 = torch.nn.ReLU()
 
         self.conv_skip = torch.nn.Conv2d(in_channels, out_channels, 1, stride=stride, padding=0)
         self.bn_skip = torch.nn.BatchNorm2d(out_channels)
+        self.act_skip = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.conv1(x)
@@ -54,10 +55,10 @@ class ResnetEncBlock(torch.nn.Module):
         y = self.act2(y)
 
         y = self.conv3(y)
-        y = self.bn3(y)
-        y = self.act3(y)
+        y = self.bn_skip(y + self.conv_skip(x))
+        y = self.act_skip(y)
 
-        return y + self.bn_skip(self.conv_skip(x))
+        return y
 
 
 class ResnetEncSmallBlock(torch.nn.Module):
@@ -76,11 +77,10 @@ class ResnetEncSmallBlock(torch.nn.Module):
         self.act1 = torch.nn.ReLU()
         
         self.conv2 = torch.nn.Conv2d(in_channels, out_channels, 3, padding=1)
-        self.bn2 = torch.nn.BatchNorm2d(out_channels)
-        self.act2 = torch.nn.ReLU()
 
         self.conv_skip = torch.nn.Conv2d(in_channels, out_channels, 1, stride=stride, padding=0)
         self.bn_skip = torch.nn.BatchNorm2d(out_channels)
+        self.act_skip = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.conv1(x)
@@ -88,18 +88,16 @@ class ResnetEncSmallBlock(torch.nn.Module):
         y = self.act1(y)
         
         y = self.conv2(y)
-        y = self.bn2(y)
-        y = self.act2(y)
-
-        return y + self.bn_skip(self.conv_skip(x))
+        y = self.bn_skip(y + self.conv_skip(x))
+        y = self.act_skip(y)
 
 
 class ResnetEncMandatory(torch.nn.Module):
     """The mandatory block of any Resnet."""
 
-    def __init__(self) -> None:
+    def __init__(self, in_channels: int = 3) -> None:
         super().__init__()
-        self.conv = torch.nn.Conv2d(3, 64, 7, stride=2, padding=3)
+        self.conv = torch.nn.Conv2d(in_channels, 64, 7, stride=2, padding=3)
         self.bn = torch.nn.BatchNorm2d(64)
         self.act = torch.nn.ReLU()
         self.pool = torch.nn.MaxPool2d(3, stride=2, padding=1)
@@ -109,6 +107,7 @@ class ResnetEncMandatory(torch.nn.Module):
         y = self.bn(y)
         y = self.act(y)
         return self.pool(y)
+
 
 class ResnetEncHead(torch.nn.Module):
     """A resnet head leading from a (c, h, w) tensor to a 1D tensor of
@@ -156,11 +155,10 @@ class ResnetDecBlock(torch.nn.Module):
         self.act2 = torch.nn.ReLU()
 
         self.conv3 = torch.nn.ConvTranspose2d(mid_channels, out_channels, 1, padding=0)
-        self.bn3 = torch.nn.BatchNorm2d(out_channels)
-        self.act3 = torch.nn.ReLU()
 
         self.conv_skip = torch.nn.ConvTranspose2d(in_channels, out_channels, 1, stride=stride, padding=0, output_padding=stride-1)
         self.bn_skip = torch.nn.BatchNorm2d(out_channels)
+        self.act_skip = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.conv1(x)
@@ -172,10 +170,10 @@ class ResnetDecBlock(torch.nn.Module):
         y = self.act2(y)
 
         y = self.conv3(y)
-        y = self.bn3(y)
-        y = self.act3(y)
+        y = self.bn_skip(y + self.conv_skip(x))
+        y = self.act_skip(y)
 
-        return y + self.bn_skip(self.conv_skip(x))
+        return y
 
 
 class ResnetDecSmallBlock(torch.nn.Module):
@@ -196,11 +194,10 @@ class ResnetDecSmallBlock(torch.nn.Module):
         self.act1 = torch.nn.ReLU()
 
         self.conv2 = torch.nn.ConvTranspose2d(out_channels, out_channels, 3, padding=1)
-        self.bn2 = torch.nn.BatchNorm2d(out_channels)
-        self.act2 = torch.nn.ReLU()
 
         self.conv_skip = torch.nn.ConvTranspose2d(in_channels, out_channels, 1, stride=stride, padding=0, output_padding=stride-1)
         self.bn_skip = torch.nn.BatchNorm2d(out_channels)
+        self.act_skip = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.conv1(x)
@@ -208,8 +205,8 @@ class ResnetDecSmallBlock(torch.nn.Module):
         y = self.act1(y)
 
         y = self.conv2(y)
-        y = self.bn2(y)
-        y = self.act2(y)
+        y = self.bn_skip(y + self.conv_skip(x))
+        y = self.act_skip(y)
 
         return y + self.bn_skip(self.conv_skip(x))
 
@@ -221,12 +218,12 @@ class ResnetDecMandatory(torch.nn.Module):
     by channel.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, out_channels: int = 3) -> None:
         super().__init__()
         self.conv = torch.nn.ConvTranspose2d(64, 3, 7, stride=2, padding=3, output_padding=1)
         self.bn = torch.nn.BatchNorm2d(3)
         self.act = torch.nn.ReLU()
-        self.pool = torch.nn.ConvTranspose2d(64, 64, 3, stride=2, padding=1, output_padding=1, groups=64)
+        self.pool = torch.nn.ConvTranspose2d(64, 64, out_channels, stride=2, padding=1, output_padding=1, groups=64)
         self.pool_bn = torch.nn.BatchNorm2d(64)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -260,195 +257,121 @@ class ResnetDecHead(torch.nn.Module):
         return self.bn(self.pool(y))
 
 
-class Resnet18Enc(torch.nn.Module):
-    """Resnet 18 encoder."""
+class ResnetEnc(torch.nn.Module):
+    """Resnet Encoder."""
 
-    def __init__(self) -> None:
+    def __init__(self, layers: int=50, n_latent=1000, input_dim=(3, 244, 224), projection_policy=None) -> None:
         super().__init__()
-        self.block0_0 = ResnetEncMandatory()
+        self.block0 = ResnetEncMandatory(input_dim[0])
 
-        self.block1_0 = ResnetEncSmallBlock(64, 64, 1)
-        self.block1_1 = ResnetEncSmallBlock(64, 64, 1)
+        if layers not in [18, 34, 50, 101, 152]:
+            raise('Invalid number of layers for a ResNet (valid: 18, 34, 50, 101, 152).')
+        
+        if layers <= 34:
+            self.block1 = torch.nn.Sequential(
+                ResnetEncSmallBlock(64, 64, 64, 1) for _ in range({18: 2, 34: 3}[layers])
+            )
+            self.block2 = torch.nn.Sequential(
+                ResnetEncSmallBlock(64, 128, 2),
+                *[ResnetEncSmallBlock(128, 128, 1) for _ in range({18: 1, 34: 3}[layers])],
+            )
+            self.block3 = torch.nn.Sequential(
+                ResnetEncSmallBlock(128, 256, 2),
+                *[ResnetEncSmallBlock(256, 256, 1) for _ in range({18: 1, 34: 5}[layers])],
+            )
+            self.block4 = torch.nn.Sequential(
+                ResnetEncSmallBlock(256, 512, 2),
+                *[ResnetEncSmallBlock(512, 512, 1) for _ in range({18: 1, 34: 2}[layers])],
+            )
+        else:
+            self.block1 = torch.nn.Sequential(
+                ResnetEncBlock(64, 64, 256, 1),
+                ResnetEncBlock(256, 64, 256, 1),
+                ResnetEncBlock(256, 64, 256, 1),
+            )
+            self.block2 = torch.nn.Sequential(
+                ResnetEncBlock(256, 128, 512, 2),
+                *[ResnetEncBlock(512, 128, 512, 1) for _ in range({50: 3, 101: 3, 152: 7}[layers])],
+            )
+            self.block3 = torch.nn.Sequential(
+                ResnetEncBlock(512, 256, 1024, 2),
+                *[ResnetEncBlock(1024, 256, 1024, 1) for _ in range({50: 5, 101: 22, 152: 35}[layers])],
+            )
+            self.block4 = torch.nn.Sequential(
+                ResnetEncBlock(1024, 512, 2048, 2),
+                ResnetEncBlock(2048, 512, 2048, 1),
+                ResnetEncBlock(2048, 512, 2048, 1),
+            )
+        
+        self.head = ResnetEncHead([d // 32 for d in input_dim[1:]], 512 if layers <= 34 else 2048, n_latent)
 
-        self.block2_0 = ResnetEncSmallBlock(64, 128, 2)
-        self.block2_1 = ResnetEncSmallBlock(128, 128, 1)
-
-        self.block3_0 = ResnetEncSmallBlock(128, 256, 2)
-        self.block3_1 = ResnetEncSmallBlock(256, 256, 1)
-
-        self.block4_0 = ResnetEncSmallBlock(256, 512, 2)
-        self.block4_1 = ResnetEncSmallBlock(512, 512, 1)
-
-        self.head = ResnetEncHead(7, 512, 1000)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = self.block0_0(x)
-
-        y = self.block1_0(y)
-        y = self.block1_1(y)
-
-        y = self.block2_0(y)
-        y = self.block2_1(y)
-
-        y = self.block3_0(y)
-        y = self.block3_1(y)
-
-        y = self.block4_0(y)
-        y = self.block4_1(y)
-
+    def forward(self, x):
+        y = self.block0(x)
+        y = self.block1(y)
+        y = self.block2(y)
+        y = self.block3(y)
+        y = self.block4(y)
         y = self.head(y)
         return y
 
 
-class Resnet34Enc(torch.nn.Module):
-    """Resnet 34 encoder."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.block0_0 = ResnetEncMandatory()
-
-        self.block1_0 = ResnetEncSmallBlock(64, 64, 1)
-        self.block1_1 = ResnetEncSmallBlock(64, 64, 1)
-        self.block1_2 = ResnetEncSmallBlock(64, 64, 1)
-
-        self.block2_0 = ResnetEncSmallBlock(64, 128, 2)
-        self.block2_1 = ResnetEncSmallBlock(128, 128, 1)
-        self.block2_2 = ResnetEncSmallBlock(128, 128, 1)
-        self.block2_3 = ResnetEncSmallBlock(128, 128, 1)
-
-        self.block3_0 = ResnetEncSmallBlock(128, 256, 2)
-        self.block3_1 = ResnetEncSmallBlock(256, 256, 1)
-        self.block3_2 = ResnetEncSmallBlock(256, 256, 1)
-        self.block3_3 = ResnetEncSmallBlock(256, 256, 1)
-        self.block3_4 = ResnetEncSmallBlock(256, 256, 1)
-        self.block3_5 = ResnetEncSmallBlock(256, 256, 1)
-
-        self.block4_0 = ResnetEncSmallBlock(256, 512, 2)
-        self.block4_1 = ResnetEncSmallBlock(512, 512, 1)
-        self.block4_2 = ResnetEncSmallBlock(512, 512, 1)
-
-        self.head = ResnetEncHead(7, 512, 1000)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        y = self.block0_0(x)
-
-        y = self.block1_0(y)
-        y = self.block1_1(y)
-        y = self.block1_2(y)
-
-        y = self.block2_0(y)
-        y = self.block2_1(y)
-        y = self.block2_2(y)
-        y = self.block2_3(y)
-
-        y = self.block3_0(y)
-        y = self.block3_1(y)
-        y = self.block3_2(y)
-        y = self.block3_3(y)
-        y = self.block3_4(y)
-        y = self.block3_5(y)
-
-        y = self.block4_0(y)
-        y = self.block4_1(y)
-        y = self.block4_2(y)
-
-        y = self.head(y)
-        return y
-
-
-class Resnet18Dec(torch.nn.Module):
+class ResnetDec(torch.nn.Module):
     """Resnet 18 decoder."""
 
-    def __init__(self) -> None:
+    def __init__(self, layers: int=50, n_latent=1000, input_dim=(3, 244, 224), projection_policy=None) -> None:
         super().__init__()
-        self.head = ResnetDecHead(500, 7, 512)
+        if layers not in [18, 34, 50, 101, 152]:
+            raise('Invalid number of layers for a ResNet (valid: 18, 34, 50, 101, 152).')
 
-        self.block4_1 = ResnetDecSmallBlock(512, 512, 1)
-        self.block4_0 = ResnetDecSmallBlock(512, 256, 2)
+        self.head = ResnetDecHead(n_latent, [d // 32 for d in input_dim[1:]], 512 if layers <= 34 else 2048, n_latent)
 
-        self.block3_1 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_0 = ResnetDecSmallBlock(256, 128, 2)
-
-        self.block2_1 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_0 = ResnetDecSmallBlock(128, 64, 2)
-
-        self.block1_1 = ResnetDecSmallBlock(64, 64, 1)
-        self.block1_0 = ResnetDecSmallBlock(64, 64, 1)
-
-        self.block0_0 = ResnetDecMandatory()
+        if layers <= 34:
+            self.block4 = torch.nn.Sequential(
+                *[ResnetDecSmallBlock(512, 512, 1) for _ in range({18: 1, 34: 2}[layers])],
+                ResnetDecSmallBlock(512, 256, 2) ,
+            )
+            self.block3 = torch.nn.Sequential(
+                *[ResnetDecSmallBlock(256, 256, 1) for _ in range({18: 1, 34: 5}[layers])],
+                ResnetDecSmallBlock(256, 128, 2),
+            )
+            self.block2 = torch.nn.Sequential(
+                *[ResnetDecSmallBlock(128, 128, 1) for _ in range({18: 1, 34: 3}[layers])],
+                ResnetDecSmallBlock(128, 64, 2),
+            )
+            self.block1 = torch.nn.Sequential(
+                ResnetDecSmallBlock(64, 64, 1) for _ in range({18: 2, 34: 3}[layers])
+            )
+        else:
+            self.block4 = torch.nn.Sequential(
+                ResnetDecBlock(2048, 512, 2048, 1),
+                ResnetDecBlock(2048, 512, 2048, 1),
+                ResnetDecBlock(2048, 512, 1024, 2),
+            )
+            self.block3 = torch.nn.Sequential(
+                *[ResnetDecBlock(1024, 256, 1024, 1) for _ in range({50: 5, 101: 22, 152: 35}[layers])],
+                ResnetDecBlock(1024, 256, 512, 2),
+            )
+            self.block2 = torch.nn.Sequential(
+                *[ResnetDecBlock(512, 128, 512, 1) for _ in range({50: 3, 101: 3, 152: 7}[layers])],
+                ResnetDecBlock(512, 128, 256, 2),
+            )
+            self.block1 = torch.nn.Sequential(
+                ResnetDecBlock(256, 64, 256, 1),
+                ResnetDecBlock(256, 64, 256, 1),
+                ResnetDecBlock(256, 64, 64, 1),
+            )
+    
+        self.block0 = ResnetDecMandatory(input_dim[0])
 
     def forward(self, x):
         y = self.head(x)
-
-        y = self.block4_1(y)
-        y = self.block4_0(y)
-
-        y = self.block3_1(y)
-        y = self.block3_0(y)
-
-        y = self.block2_1(y)
-        y = self.block2_0(y)
-
-        y = self.block1_1(y)
-        y = self.block1_0(y)
-
-        return self.block0_0(y)
-    
-
-class Resnet34Dec(torch.nn.Module):
-    """Resnet 34 decoder."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.head = ResnetDecHead(500, 7, 512)
-
-        self.block4_2 = ResnetDecSmallBlock(512, 512, 1)
-        self.block4_1 = ResnetDecSmallBlock(512, 512, 1)
-        self.block4_0 = ResnetDecSmallBlock(512, 256, 2)
-
-        self.block3_5 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_4 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_3 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_2 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_1 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_0 = ResnetDecSmallBlock(256, 128, 2)
-
-        self.block2_3 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_2 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_1 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_0 = ResnetDecSmallBlock(128, 64, 2)
-
-        self.block1_2 = ResnetDecSmallBlock(64, 64, 1)
-        self.block1_1 = ResnetDecSmallBlock(64, 64, 1)
-        self.block1_0 = ResnetDecSmallBlock(64, 64, 1)
-
-        self.block0_0 = ResnetDecMandatory()
-
-    def forward(self, x):
-        y = self.head(x)
-
-        y = self.block4_2(y)
-        y = self.block4_1(y)
-        y = self.block4_0(y)
-
-        y = self.block3_5(y)
-        y = self.block3_4(y)
-        y = self.block3_3(y)
-        y = self.block3_2(y)
-        y = self.block3_1(y)
-        y = self.block3_0(y)
-
-        y = self.block2_3(y)
-        y = self.block2_2(y)
-        y = self.block2_1(y)
-        y = self.block2_0(y)
-
-        y = self.block1_2(y)
-        y = self.block1_1(y)
-        y = self.block1_0(y)
-
-        return self.block0_0(y)
-    
+        y = self.block4(y)
+        y = self.block3(y)
+        y = self.block2(y)
+        y = self.block1(y)
+        y = self.block0(y)
+        return y
+  
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Train a Resnet VAE')
