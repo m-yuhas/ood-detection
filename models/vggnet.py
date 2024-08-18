@@ -1,9 +1,11 @@
-import argparse
-import os
+"""VGGNet Encoder and Decoder.  Based on:
 
-import pytorch_lightning
+K. Simonyan and A. Zisserman, ``Very Deep Convolution Networks for Large-Scale
+Image Recognition,'' 3rd International Conference on Learning Representations
+(ICLR), San Diego, CA, USA, May 2015.
+"""
+
 import torch
-import torchvision
 
 
 class VggnetEncBlock(torch.nn.Module):
@@ -36,7 +38,7 @@ class VggnetEncBlock(torch.nn.Module):
 class VggnetEncHead(torch.nn.Module):
     def __init__(self, in_dim, in_channels, n_latent):
         super().__init__()
-        self.fc1 = torch.nn.Linear(in_channels * in_dim * in_dim, 4096)
+        self.fc1 = torch.nn.Linear(in_channels * in_dim[0] * in_dim[1], 4096)
         self.act1 = torch.nn.ReLU()
         self.fc2 = torch.nn.Linear(4096, 4096)
         self.act2 = torch.nn.ReLU()
@@ -97,7 +99,7 @@ class VggnetDecHead(torch.nn.Module):
         self.act0 = torch.nn.ReLU()
         self.fc1 = torch.nn.Linear(4096, 4096)
         self.act1 = torch.nn.ReLU()
-        self.fc2 = torch.nn.Linear(4096, out_dim * out_dim * out_channels)
+        self.fc2 = torch.nn.Linear(4096, out_dim[0] * out_dim[1] * out_channels)
         self.act2 = torch.nn.ReLU()
         self.out_dim = out_dim
         self.out_channels = out_channels
@@ -106,215 +108,49 @@ class VggnetDecHead(torch.nn.Module):
         y = self.act0(self.fc0(x))
         y = self.act1(self.fc1(y))
         y = self.act2(self.fc2(y))
-        y = torch.reshape(y, (-1, self.out_channels, self.out_dim, self.out_dim))
+        y = torch.reshape(y, (-1, self.out_channels, self.out_dim[0], self.out_dim[1]))
         return y
 
-class Vggnet11Enc(pytorch_lightning.LightningModule):
 
-    def __init__(self):
+class VggnetEnc(torch.nn.Module):
+
+    def __init__(self, layers: int=16, n_latent=1000, input_dim=(3, 244, 224)) -> None:
         super().__init__()
-        self.block0_quant = torch.ao.quantization.QuantStub()
-        self.block0 = VggnetEncBlock(3, 64, 1)
-        self.block0_dequant = torch.ao.quantization.DeQuantStub()
 
-        self.block1_quant = torch.ao.quantization.QuantStub()
-        self.block1 = VggnetEncBlock(64, 128, 1)
-        self.block1_dequant = torch.ao.quantization.DeQuantStub()
+        if layers not in [11, 13, 16, 19]:
+            raise('Invalid number of layers for a ResNet (valid: 11, 13, 16, 19).')
 
-        self.block2_quant = torch.ao.quantization.QuantStub()
-        self.block2 = VggnetEncBlock(128, 256, 2)
-        self.block2_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block3_quant = torch.ao.quantization.QuantStub()
-        self.block3 = VggnetEncBlock(256, 512, 2)
-        self.block3_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block4_quant = torch.ao.quantization.QuantStub()
-        self.block4 = VggnetEncBlock(512, 512, 2)
-        self.block4_dequant = torch.ao.quantization.DeQuantStub()
-
+        self.block0 = VggnetEncBlock(input_dim[0], 64, 1 if layers == 11 else 2) 
+        self.block1 = VggnetEncBlock(64, 128, 1 if layers == 11 else 2)
+        self.block2 = VggnetEncBlock(128, 256, {11: 2, 13: 2, 16: 3, 19: 4}[layers])
+        self.block3 = VggnetEncBlock(256, 512, {11: 2, 13: 2, 16: 3, 19: 4}[layers])
+        self.block4 = VggnetEncBlock(512, 512, {11: 2, 13: 2, 16: 3, 19: 4}[layers])
+        self.head = VggnetEncHead((input_dim[1] // 32, input_dim[2] // 32), in_channels=512, n_latent=n_latent)
 
     def forward(self, x):
-        y = self.block0_quant(x)
-        y = self.block0(y)
-        y = self.block0_dequant(y)
-
-        y = self.block1_quant(y)
+        y = self.block0(x)
         y = self.block1(y)
-        y = self.block1_dequant(y)
-
-        y = self.block2_quant(y)
         y = self.block2(y)
-        y = self.block2_dequant(y)
-
-        y = self.block3_quant(y)
         y = self.block3(y)
-        y = self.block3_dequant(y)
-
-        y = self.block4_quant(y)
         y = self.block4(y)
-        y = self.block4_dequant(y)
-
-        return y 
-
-class Vggnet13Enc(pytorch_lightning.LightningModule):
-
-    def __init__(self):
-        super().__init__()
-        self.block0_quant = torch.ao.quantization.QuantStub()
-        self.block0 = VggnetEncBlock(3, 64, 2)
-        self.block0_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block1_quant = torch.ao.quantization.QuantStub()
-        self.block1 = VggnetEncBlock(64, 128, 2)
-        self.block1_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block2_quant = torch.ao.quantization.QuantStub()
-        self.block2 = VggnetEncBlock(128, 256, 2)
-        self.block2_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block3_quant = torch.ao.quantization.QuantStub()
-        self.block3 = VggnetEncBlock(256, 512, 2)
-        self.block3_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block4_quant = torch.ao.quantization.QuantStub()
-        self.block4 = VggnetEncBlock(512, 512, 2)
-        self.block4_dequant = torch.ao.quantization.DeQuantStub()
-
-
-    def forward(self, x):
-        y = self.block0_quant(x)
-        y = self.block0(y)
-        y = self.block0_dequant(y)
-
-        y = self.block1_quant(y)
-        y = self.block1(y)
-        y = self.block1_dequant(y)
-
-        y = self.block2_quant(y)
-        y = self.block2(y)
-        y = self.block2_dequant(y)
-
-        y = self.block3_quant(y)
-        y = self.block3(y)
-        y = self.block3_dequant(y)
-
-        y = self.block4_quant(y)
-        y = self.block4(y)
-        y = self.block4_dequant(y)
-
+        y = self.head(y)
         return y 
 
 
-class Vggnet16Enc(pytorch_lightning.LightningModule):
+class VggnetDec(torch.nn.Module):
 
-    def __init__(self):
-        super().__init__()
-        self.block0_quant = torch.ao.quantization.QuantStub()
-        self.block0 = VggnetEncBlock(3, 64, 2)
-        self.block0_dequant = torch.ao.quantization.DeQuantStub()
+    def __init__(self, layers: int=16, n_latent=1000, output_dim=(3, 244, 224)):
+        super.__init__()
 
-        self.block1_quant = torch.ao.quantization.QuantStub()
-        self.block1 = VggnetEncBlock(64, 128, 2)
-        self.block1_dequant = torch.ao.quantization.DeQuantStub()
+        if layers not in [11, 13, 16, 19]:
+            raise('Invalid number of layers for a ResNet (valid: 11, 13, 16, 19).')
 
-        self.block2_quant = torch.ao.quantization.QuantStub()
-        self.block2 = VggnetEncBlock(128, 256, 3)
-        self.block2_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block3_quant = torch.ao.quantization.QuantStub()
-        self.block3 = VggnetEncBlock(256, 512, 3)
-        self.block3_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block4_quant = torch.ao.quantization.QuantStub()
-        self.block4 = VggnetEncBlock(512, 512, 3)
-        self.block4_dequant = torch.ao.quantization.DeQuantStub()
-
-
-    def forward(self, x):
-        y = self.block0_quant(x)
-        y = self.block0(y)
-        y = self.block0_dequant(y)
-
-        y = self.block1_quant(y)
-        y = self.block1(y)
-        y = self.block1_dequant(y)
-
-        y = self.block2_quant(y)
-        y = self.block2(y)
-        y = self.block2_dequant(y)
-
-        y = self.block3_quant(y)
-        y = self.block3(y)
-        y = self.block3_dequant(y)
-
-        y = self.block4_quant(y)
-        y = self.block4(y)
-        y = self.block4_dequant(y)
-
-        return y 
-
-
-class Vggnet19Enc(pytorch_lightning.LightningModule):
-
-    def __init__(self):
-        super().__init__()
-        self.block0_quant = torch.ao.quantization.QuantStub()
-        self.block0 = VggnetEncBlock(3, 64, 2)
-        self.block0_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block1_quant = torch.ao.quantization.QuantStub()
-        self.block1 = VggnetEncBlock(64, 128, 2)
-        self.block1_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block2_quant = torch.ao.quantization.QuantStub()
-        self.block2 = VggnetEncBlock(128, 256, 4)
-        self.block2_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block3_quant = torch.ao.quantization.QuantStub()
-        self.block3 = VggnetEncBlock(256, 512, 4)
-        self.block3_dequant = torch.ao.quantization.DeQuantStub()
-
-        self.block4_quant = torch.ao.quantization.QuantStub()
-        self.block4 = VggnetEncBlock(512, 512, 4)
-        self.block4_dequant = torch.ao.quantization.DeQuantStub()
-
-
-    def forward(self, x):
-        y = self.block0_quant(x)
-        y = self.block0(y)
-        y = self.block0_dequant(y)
-
-        y = self.block1_quant(y)
-        y = self.block1(y)
-        y = self.block1_dequant(y)
-
-        y = self.block2_quant(y)
-        y = self.block2(y)
-        y = self.block2_dequant(y)
-
-        y = self.block3_quant(y)
-        y = self.block3(y)
-        y = self.block3_dequant(y)
-
-        y = self.block4_quant(y)
-        y = self.block4(y)
-        y = self.block4_dequant(y)
-
-        return y 
-
-
-class Vggnet11Dec(pytorch_lightning.LightningModule):
-
-    def __init__(self, n_latent):
-        super().__init__()
-        self.head = VggnetDecHead(n_latent, 7, 512)
-
-        self.block4 = VggnetDecBlock(512, 512, 2)
-        self.block3 = VggnetDecBlock(512, 256, 2)
-        self.block2 = VggnetDecBlock(256, 128, 2)
-        self.block1 = VggnetDecBlock(128, 64, 1)
-        self.block0 = VggnetDecBlock(64, 3, 1)
+        self.head = VggnetDecHead(n_latent, (output_dim[1] // 32, output_dim[2] // 32), 512)
+        self.block4 = VggnetDecBlock(512, 512, {11: 2, 13: 2, 16: 3, 19: 4}[layers])
+        self.block3 = VggnetEncBlock(512, 256, {11: 2, 13: 2, 16: 3, 19: 4}[layers])
+        self.block2 = VggnetEncBlock(256, 128, {11: 2, 13: 2, 16: 3, 19: 4}[layers])
+        self.block1 = VggnetEncBlock(128, 64, 1 if layers == 11 else 2)
+        self.block0 = VggnetEncBlock(64, output_dim[0], 1 if layers == 11 else 2) 
 
     def forward(self, x):
         y = self.head(x)
@@ -323,216 +159,4 @@ class Vggnet11Dec(pytorch_lightning.LightningModule):
         y = self.block2(y)
         y = self.block1(y)
         y = self.block0(y)
-        return y
-
-
-class Vggnet13Dec(pytorch_lightning.LightningModule):
-
-    def __init__(self, n_latent):
-        super().__init__()
-        self.head = VggnetDecHead(n_latent, 7, 512)
-
-        self.block4 = VggnetDecBlock(512, 512, 2)
-        self.block3 = VggnetDecBlock(512, 256, 2)
-        self.block2 = VggnetDecBlock(256, 128, 2)
-        self.block1 = VggnetDecBlock(128, 64, 2)
-        self.block0 = VggnetDecBlock(64, 3, 2)
-
-    def forward(self, x):
-        y = self.head(x)
-        y = self.block4(y)
-        y = self.block3(y)
-        y = self.block2(y)
-        y = self.block1(y)
-        y = self.block0(y)
-        return y
-
-class Vggnet16Dec(pytorch_lightning.LightningModule):
-
-    def __init__(self, n_latent):
-        super().__init__()
-        self.head = VggnetDecHead(n_latent, 7, 512)
-
-        self.block4 = VggnetDecBlock(512, 512, 3)
-        self.block3 = VggnetDecBlock(512, 256, 3)
-        self.block2 = VggnetDecBlock(256, 128, 3)
-        self.block1 = VggnetDecBlock(128, 64, 2)
-        self.block0 = VggnetDecBlock(64, 3, 2)
-
-    def forward(self, x):
-        y = self.head(x)
-        y = self.block4(y)
-        y = self.block3(y)
-        y = self.block2(y)
-        y = self.block1(y)
-        y = self.block0(y)
-        return y
-
-class Vggnet19Dec(pytorch_lightning.LightningModule):
-
-    def __init__(self, n_latent):
-        super().__init__()
-        self.head = VggnetDecHead(n_latent, 7, 512)
-
-        self.block4 = VggnetDecBlock(512, 512, 4)
-        self.block3 = VggnetDecBlock(512, 256, 4)
-        self.block2 = VggnetDecBlock(256, 128, 4)
-        self.block1 = VggnetDecBlock(128, 64, 2)
-        self.block0 = VggnetDecBlock(64, 3, 2)
-
-    def forward(self, x):
-        y = self.head(x)
-        y = self.block4(y)
-        y = self.block3(y)
-        y = self.block2(y)
-        y = self.block1(y)
-        y = self.block0(y)
-        return y
-
-
-class VggnetVae(pytorch_lightning.LightningModule):
-
-    def __init__(self, depth=11, n_latent=250, beta=1, input_dim=(224, 224), learning_rate=1e-5):
-        super().__init__()
-        self.beta = beta
-        self.n_latent = n_latent
-        self.learning_rate = learning_rate
-        if depth == 11:
-            self.encoder = Vggnet11Enc()
-            self.decoder = Vggnet11Dec(n_latent)
-        elif depth == 13:
-            self.encoder = Vggnet13Enc()
-            self.decoder = Vggnet13Dec(n_latent)
-        elif depth == 16:
-            self.encoder = Vggnet16Enc()
-            self.decoder = Vggnet16Dec(n_latent)
-        elif depth == 19:
-            self.encoder = Vggnet19Enc()
-            self.decoder = Vggnet19Dec(n_latent)
-        self.enc_head = VggnetEncHead(input_dim[0] // 32, 512, 2 * n_latent)
-
-    def forward(self, x):
-        y = self.enc_head(self.encoder(x))
-        mu, logvar = y[:, :y.shape[-1] // 2], y[:, y.shape[-1] // 2:]
-        stdev = torch.exp(logvar / 2)
-        eps = torch.randn_like(stdev)
-        z = mu + stdev * eps
-        return self.decoder(z), mu, logvar
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-
-    def training_step(self, train_batch, batch_idx):
-        x, _ = train_batch
-        x_hat, mu, logvar = self.forward(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        mse_loss = torch.nn.functional.mse_loss(x_hat, x, reduction='mean')
-        loss = mse_loss + self.beta * kl_loss
-        self.log('train_loss', loss)
-        return loss
-
-    def validation_step(self, val_batch, batch_idx):
-        x, _ = val_batch
-        x_hat, mu, logvar = self.forward(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        mse_loss = torch.nn.functional.mse_loss(x_hat, x, reduction='mean')
-        loss = mse_loss + self.beta * kl_loss
-        self.log('val_loss', loss)
-        return loss
-
-    def test_step(self, test_batch, batch_idx):
-        x, y = test_batch
-        mu, logvar = self.encoder(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        self.log('dkl', kl_loss)
-        return kl_loss, y
-
-
-    def predict_step(self, predict_batch, batch_idx):
-        x, y = predict_batch
-        mu, logvar = self.encoder(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        return kl_loss, y
-
-class VggnetWsvae(pytorch_lightning.LightningModule):
-
-    def __init__(self, depth=11, n_latent=250, levels=5, alpha=1, beta=1, gamma=1, input_dim=(224, 224), learning_rate=1e-5):
-        super().__init__()
-        self.alpha = alpha
-        self.beta = beta
-        self.gamma = gamma
-        self.n_latent = n_latent
-        self.learning_rate = learning_rate
-        self.levels = levels
-        if depth == 11:
-            self.encoder = Vggnet11Enc()
-            self.decoder = Vggnet11Dec(n_latent)
-        elif depth == 13:
-            self.encoder = Vggnet13Enc()
-            self.decoder = Vggnet13Dec(n_latent)
-        elif depth == 16:
-            self.encoder = Vggnet16Enc()
-            self.decoder = Vggnet16Dec(n_latent)
-        elif depth == 19:
-            self.encoder = Vggnet19Enc()
-            self.decoder = Vggnet19Dec(n_latent)
-        self.enc_head = VggnetEncHead(input_dim[0] // 32, 512, 2 * n_latent)
-        self.cls_head = torch.nn.Sequential(
-            torch.nn.Linear(1, 4096),
-            torch.nn.Sigmoid(),
-            torch.nn.Linear(4096, 4096),
-            torch.nn.Sigmoid(),
-            torch.nn.Linear(4096, levels),
-            torch.nn.Sigmoid(),
-        )
-
-    def forward(self, x):
-        y = self.enc_head(self.encoder(x))
-        mu, logvar = y[:, :y.shape[-1] // 2], y[:, y.shape[-1] // 2:]
-        y = self.cls_head(torch.unsqueeze(mu[:, 0],1))
-        stdev = torch.exp(logvar / 2)
-        eps = torch.randn_like(stdev)
-        z = mu + stdev * eps
-        return self.decoder(z), mu, logvar, y
-
-    def configure_optimizers(self):
-        return torch.optim.Adam(self.parameters(), lr=self.learning_rate)
-
-    def training_step(self, train_batch, batch_idx):
-        x, y = train_batch
-        x_hat, mu, logvar, y_hat = self.forward(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        mse_loss = torch.nn.functional.mse_loss(x_hat, x, reduction='mean')
-        ce_loss = torch.nn.functional.binary_cross_entropy(y_hat, torch.nn.functional.one_hot(y, self.levels).float(), reduction='mean')
-        pstn_loss = torch.nn.functional.mse_loss(mu[:, 0], (y - self.levels / 2) / self.levels, reduction='mean')
-        loss = mse_loss + self.beta * kl_loss + self.alpha * ce_loss + self.gamma * pstn_loss
-        self.log('train_loss', loss)
-        return loss
-
-    def validation_step(self, val_batch, batch_idx):
-        x, y = val_batch
-        x_hat, mu, logvar, y_hat = self.forward(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        mse_loss = torch.nn.functional.mse_loss(x_hat, x, reduction='mean')
-        ce_loss = torch.nn.functional.binary_cross_entropy(y_hat, torch.nn.functional.one_hot(y, self.levels).float(), reduction='mean')
-        pstn_loss = torch.nn.functional.mse_loss(mu[:, 0], (y - self.levels / 2) / self.levels, reduction='mean')
-        loss = mse_loss + self.beta * kl_loss + self.alpha * ce_loss + self.gamma * pstn_loss
-        self.log('val_loss', loss)
-        return loss
-
-    def test_step(self, test_batch, batch_idx):
-        x, y = test_batch
-        l = self.enc_head(self.encoder(x))
-        mu, logvar = l[:, :l.shape[-1] // 2], l[:, l.shape[-1] // 2:]
-        #kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        #self.log('dkl', kl_loss)
-        self.log('oodscore', mu[:,0])
-        return mu[:, 0], y
-
-
-    def predict_step(self, predict_batch, batch_idx):
-        x, y = predict_batch
-        l = self.enc_head(self.encoder(x))
-        mu, logvar = l[:, :l.shape[-1] // 2], l[:, l.shape[-1] // 2:]
-        #kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
-        return mu[:, 0], y
+        return y 
