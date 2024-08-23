@@ -7,13 +7,8 @@ Networks for Mobile Vision Applications,'' 2017, arXiv:1704.04861.
 
 
 from typing import Tuple
-import argparse
-import os
 
-
-import pytorch_lightning
 import torch
-import torchvision
 
 
 class ConvEncBlock(torch.nn.Module):
@@ -25,7 +20,6 @@ class ConvEncBlock(torch.nn.Module):
         stride: stride for the entire block
         kernel_size: kernel size 
     """
-
 
     def __init__(self, in_channels: int, out_channels: int, stride: int, kernel_size: int=3) -> None:
         super().__init__()
@@ -101,7 +95,7 @@ class ConvDecBlock(torch.nn.Module):
         kernel_size: convolutional kernel size
     """
 
-    def __init__(self, in_channels: int, mid_channels: int, out_channels: int, stride: int, kernel_size: int = 3) -> None:
+    def __init__(self, in_channels: int, out_channels: int, stride: int, kernel_size: int = 3) -> None:
         super().__init__()
         self.upsample = torch.nn.Upsample(stride)
         self.conv = torch.nn.Conv2d(in_channels, out_channels, kernel_size, padding=kernel_size // 2)
@@ -170,33 +164,33 @@ class MobilenetDecHead(torch.nn.Module):
 
 
 class MobileNetEnc(torch.nn.Module):
-    """Resnet 18 encoder."""
+    """MobileNet Encoder."""
 
     def __init__(self, alpha=1, n_latent=1000, input_shape=(3,224,224)) -> None:
         super().__init__()
         self.block0 = ConvEncBlock(input_shape[0], int(32 * alpha), stride=2)
 
-        self.block1 = torch.nn.ModuleList([
+        self.block1 = torch.nn.Sequential(
             DepthwiseConvEncBlock(int(alpha * 32), int(alpha * 32), stride=1),
-            ConvEncBlock(int(alpha * 32), int(alpha * 128), stride=1),
+            ConvEncBlock(int(alpha * 32), int(alpha * 64), stride=1),
             DepthwiseConvEncBlock(int(alpha * 64), int(alpha * 64), stride=2),
-        ])
+        )
 
-        self.block2 = torch.nn.ModuleList([
+        self.block2 = torch.nn.Sequential(
             ConvEncBlock(int(alpha * 64), int(alpha * 128), stride=1, kernel_size=1),
             DepthwiseConvEncBlock(int(alpha * 128), int(alpha * 128), stride=1),
             ConvEncBlock(int(alpha * 128), int(alpha * 128), stride=1, kernel_size=1),
-            DepthwiseConvDecBlock(int(alpha * 128), int(alpha * 128), stride=2),
-        ])
+            DepthwiseConvEncBlock(int(alpha * 128), int(alpha * 128), stride=2),
+        )
 
-        self.block3 = torch.nn.ModuleList([
+        self.block3 = torch.nn.Sequential(
             ConvEncBlock(int(alpha * 128), int(alpha * 256), stride=1, kernel_size=1),
             DepthwiseConvEncBlock(int(alpha * 256), int(alpha * 256), stride=1),
             ConvEncBlock(int(alpha *256), int(alpha * 256), stride=1, kernel_size=1),
             DepthwiseConvEncBlock(int(alpha * 256), int(alpha * 256), stride=2),
-        ])
+        )
 
-        self.block4 = torch.nn.ModuleList([
+        self.block4 = torch.nn.Sequential(
             ConvEncBlock(int(alpha * 256), int(alpha * 512), stride=1, kernel_size=1),
             *[
                 DepthwiseConvEncBlock(int(alpha * 512), int(alpha * 512), stride=1),
@@ -204,13 +198,13 @@ class MobileNetEnc(torch.nn.Module):
                 for _ in range(5)
             ],
             DepthwiseConvEncBlock(int(alpha * 512), int(alpha * 512), stride=2),
-        ])
+        )
 
-        self.block5 = torch.nn.ModuleList([
+        self.block5 = torch.nn.Sequential(
             ConvEncBlock(int(alpha * 512), int(alpha * 1024), stride=1, kernel_size=1),
             DepthwiseConvEncBlock(int(alpha * 1024), int(alpha * 1024), stride=1),
             ConvEncBlock(int(alpha * 1024), int(alpha * 1024), stride=1, kernel_size=1),
-        ])
+        )
 
         self.head = MobilenetEncHead((input_shape[1] // 32, input_shape[2] // 32), int(alpha * 1024), n_latent)
 
@@ -225,133 +219,56 @@ class MobileNetEnc(torch.nn.Module):
         return y
 
 
-class Resnet18Dec(torch.nn.Module):
-    """Resnet 18 decoder."""
-
-    def __init__(self) -> None:
+class MobileNetDec(torch.nn.Module):
+    def __init__(self, alpha=1, n_latent=1000, output_dim=(3,224,224)) -> None:
         super().__init__()
-        self.head = ResnetDecHead(500, 7, 512)
 
-        self.block4_1 = ResnetDecSmallBlock(512, 512, 1)
-        self.block4_0 = ResnetDecSmallBlock(512, 256, 2)
+        self.head = MobilenetDecHead(n_latent, (ouptut_dim[0] // 32, output_dim[2] // 32), int(alpha * 1024))
 
-        self.block3_1 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_0 = ResnetDecSmallBlock(256, 128, 2)
+        self.block5 = torch.nn.Sequential(
+            ConvDecBlock(int(alpha * 1024), int(alpha * 1024), stride=1, kernel_size=1),
+            DepthwiseConvDecBlock(int(alpha * 1024), int(alpha * 1024), stride=1),
+            ConvEncBlock(int(alpha * 1024), int(alpha * 512), stride=1, kernel_size=1),
+        )
 
-        self.block2_1 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_0 = ResnetDecSmallBlock(128, 64, 2)
+        self.block4 = torch.nn.Sequential(
+            DepthwiseConvDecBlock(int(alpha * 512), int(alpha * 512), stride=2),
+            *[
+                DepthwiseConvDecBlock(int(alpha * 512), int(alpha * 512), stride=1),
+                ConvDecBlock(int(alpha * 512), int(alpha * 512), stride=1, kernel_size=1)
+                for _ in range(5)
+            ],
+            ConvDecBlock(int(alpha * 512), int(alpha * 256), stride=1, kernel_size=1),
+        )
 
-        self.block1_1 = ResnetDecSmallBlock(64, 64, 1)
-        self.block1_0 = ResnetDecSmallBlock(64, 64, 1)
+        self.block3 = torch.nn.Sequential(
+            DepthwiseConvDecBlock(int(alpha * 256), int(alpha * 256), stride=2),
+            ConvDecBlock(int(alpha * 256), int(alpha * 256), stride=1, kernel_size=1),
+            DepthwiseConvDecBlock(int(alpha * 256), int(alpha * 256), stride=1),
+            ConvDecBlock(int(alpha * 256), int(alpha * 128), stride=1, kernel_size=1),
+        )
 
-        self.block0_0 = ResnetDecMandatory()
+        self.block2 = torch.nn.Sequential(
+            DepthwiseConvDecBlock(int(alpha * 128), int(alpha * 128), stride=2),
+            ConvDecBlock(int(alpha * 128), int(alpha * 128), stride=1, kernel_size=1),
+            DepthwiseConvDecBlock(int(alpha * 128), int(alpha * 128), stride=1),
+            ConvDecBlock(int(alpha * 128), int(alpha * 64), stride=1, kernel_size=1),
+        )
 
-    def forward(self, x):
+        self.block1 = torch.nn.Sequential(
+            DepthwiseConvDecBlock(int(alpha * 64), int(alpha * 64), stride=2),
+            ConvEncBlock(int(alpha * 64), int(alpha * 32), stride=1),
+            DepthwiseConvDecBlock(int(alpha * 32), int(alpha * 32), stride=1),
+        )
+
+        self.block0 = ConvDecBlock(output_dim[0], int(32 * alpha), stride=2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.head(x)
-
-        y = self.block4_1(y)
-        y = self.block4_0(y)
-
-        y = self.block3_1(y)
-        y = self.block3_0(y)
-
-        y = self.block2_1(y)
-        y = self.block2_0(y)
-
-        y = self.block1_1(y)
-        y = self.block1_0(y)
-
-        return self.block0_0(y)
-    
-
-class Resnet34Dec(torch.nn.Module):
-    """Resnet 34 decoder."""
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.head = ResnetDecHead(500, 7, 512)
-
-        self.block4_2 = ResnetDecSmallBlock(512, 512, 1)
-        self.block4_1 = ResnetDecSmallBlock(512, 512, 1)
-        self.block4_0 = ResnetDecSmallBlock(512, 256, 2)
-
-        self.block3_5 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_4 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_3 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_2 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_1 = ResnetDecSmallBlock(256, 256, 1)
-        self.block3_0 = ResnetDecSmallBlock(256, 128, 2)
-
-        self.block2_3 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_2 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_1 = ResnetDecSmallBlock(128, 128, 1)
-        self.block2_0 = ResnetDecSmallBlock(128, 64, 2)
-
-        self.block1_2 = ResnetDecSmallBlock(64, 64, 1)
-        self.block1_1 = ResnetDecSmallBlock(64, 64, 1)
-        self.block1_0 = ResnetDecSmallBlock(64, 64, 1)
-
-        self.block0_0 = ResnetDecMandatory()
-
-    def forward(self, x):
-        y = self.head(x)
-
-        y = self.block4_2(y)
-        y = self.block4_1(y)
-        y = self.block4_0(y)
-
-        y = self.block3_5(y)
-        y = self.block3_4(y)
-        y = self.block3_3(y)
-        y = self.block3_2(y)
-        y = self.block3_1(y)
-        y = self.block3_0(y)
-
-        y = self.block2_3(y)
-        y = self.block2_2(y)
-        y = self.block2_1(y)
-        y = self.block2_0(y)
-
-        y = self.block1_2(y)
-        y = self.block1_1(y)
-        y = self.block1_0(y)
-
-        return self.block0_0(y)
-    
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser('Train a Resnet VAE')
-    parser.add_argument(
-        '--train_dataset',
-        help='Path to folder of training images'
-    )
-    parser.add_argument(
-        '--val_dataset',
-        help='Path to folder of validation images'
-    )
-    parser.add_argument(
-        '--batch',
-        help='Batch size'
-    )
-    parser.add_argument(
-        '--epochs',
-        help='Number of epochs to train'
-    )
-    parser.add_argument(
-        '--name',
-        help='Name of output model'
-    )
-    args = parser.parse_args()
-    model = Resnet18Vae()
-    data = OodDataModule(args.train_dataset, args.val_dataset, None, None, batch_size=int(args.batch)) 
-    trainer = pytorch_lightning.Trainer(
-        accelerator='gpu',
-        devices=1,
-        deterministic=True,
-        min_epochs=50,
-        max_epochs=int(args.epochs),
-        log_every_n_steps=1,
-        logger=pytorch_lightning.loggers.CSVLogger("logs", name=args.name),
-    )
-    trainer.fit(model, datamodule=data)
-    torch.save(model, args.name + '.pt')
+        y = self.block5(y)
+        y = self.block4(y)
+        y = self.block3(y)
+        y = self.block2(y)
+        y = self.block1(y)
+        y = self.block0(y)
+        return y
