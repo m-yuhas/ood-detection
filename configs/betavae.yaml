@@ -1,0 +1,17 @@
+# betavae, vae, ae, etc.
+seed: 0
+
+detection model: betavae
+backbone: mobilenet
+model hyperparameters:
+  alpha: 0.25
+  input_dim: [3, 128, 128]
+  n_latent: 30
+
+training hyperparameters:
+  beta: 1.0
+  batch size: 16
+  epochs: 25
+  learning rate: 0.00001
+  optimizer: adam
+

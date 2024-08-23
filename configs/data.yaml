@@ -1,0 +1,4 @@
+dataset type: image
+train path: /mnt/sdb/Datasets/GTSRB/test
+val path: /mnt/sdb/Datasets/GTSRB/val
+test path: /mnt/sdb/Dataset/GTSRB/test

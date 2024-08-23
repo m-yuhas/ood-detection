@@ -42,9 +42,11 @@ class BetaVae(pytorch_lightning.LightningModule):
         return loss
 
     def test_step(self, test_batch, batch_idx):
-        loss = self.elbo_loss(test_batch)
+        x, _ = test_batch
+        x_hat, mu, logvar = self.forward(x)
+        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
         self.log('test_loss', kl_loss)
-        return loss
+        return kl_loss
 
     def predict_step(self, predict_batch, batch_idx):
         x, y = predict_batch

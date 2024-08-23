@@ -97,14 +97,14 @@ class ConvDecBlock(torch.nn.Module):
 
     def __init__(self, in_channels: int, out_channels: int, stride: int, kernel_size: int = 3) -> None:
         super().__init__()
-        self.upsample = torch.nn.Upsample(stride)
+        self.upsample = torch.nn.Upsample(scale_factor=stride)
         self.conv = torch.nn.Conv2d(in_channels, out_channels, kernel_size, padding=kernel_size // 2)
         self.bn = torch.nn.BatchNorm2d(out_channels)
         self.act = torch.nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.act(self.bn(self.conv(self.upsample(x))))
-
+        y = self.act(self.bn(self.conv(self.upsample(x))))
+        return y
 
 class DepthwiseConvDecBlock(torch.nn.Module):
     """Upsample and use regular convolutions to allow quantization.
@@ -122,7 +122,7 @@ class DepthwiseConvDecBlock(torch.nn.Module):
         self.bn = torch.nn.BatchNorm2d(out_channels)
         self.act = torch.nn.ReLU()
 
-        self.upsample = torch.nn.Upsample(stride)
+        self.upsample = torch.nn.Upsample(scale_factor=stride)
         self.dwconv = torch.nn.Conv2d(out_channels, out_channels, kernel_size, padding=kernel_size // 2, groups=in_channels)
         self.dwbn = torch.nn.BatchNorm2d(out_channels)
         self.dwact = torch.nn.ReLU()
@@ -193,9 +193,10 @@ class MobileNetEnc(torch.nn.Module):
         self.block4 = torch.nn.Sequential(
             ConvEncBlock(int(alpha * 256), int(alpha * 512), stride=1, kernel_size=1),
             *[
-                DepthwiseConvEncBlock(int(alpha * 512), int(alpha * 512), stride=1),
-                ConvEncBlock(int(alpha * 512), int(alpha * 512), stride=1, kernel_size=1)
-                for _ in range(5)
+                block for _ in range(5) for block in [
+                    DepthwiseConvEncBlock(int(alpha * 512), int(alpha * 512), stride=1),
+                    ConvEncBlock(int(alpha * 512), int(alpha * 512), stride=1, kernel_size=1)
+                ]
             ],
             DepthwiseConvEncBlock(int(alpha * 512), int(alpha * 512), stride=2),
         )
@@ -220,23 +221,24 @@ class MobileNetEnc(torch.nn.Module):
 
 
 class MobileNetDec(torch.nn.Module):
-    def __init__(self, alpha=1, n_latent=1000, output_dim=(3,224,224)) -> None:
+    def __init__(self, alpha=1, n_latent=1000, output_shape=(3,224,224)) -> None:
         super().__init__()
 
-        self.head = MobilenetDecHead(n_latent, (ouptut_dim[0] // 32, output_dim[2] // 32), int(alpha * 1024))
+        self.head = MobilenetDecHead(n_latent, (output_shape[1] // 32, output_shape[2] // 32), int(alpha * 1024))
 
         self.block5 = torch.nn.Sequential(
             ConvDecBlock(int(alpha * 1024), int(alpha * 1024), stride=1, kernel_size=1),
             DepthwiseConvDecBlock(int(alpha * 1024), int(alpha * 1024), stride=1),
-            ConvEncBlock(int(alpha * 1024), int(alpha * 512), stride=1, kernel_size=1),
+            ConvDecBlock(int(alpha * 1024), int(alpha * 512), stride=1, kernel_size=1),
         )
 
         self.block4 = torch.nn.Sequential(
             DepthwiseConvDecBlock(int(alpha * 512), int(alpha * 512), stride=2),
             *[
-                DepthwiseConvDecBlock(int(alpha * 512), int(alpha * 512), stride=1),
-                ConvDecBlock(int(alpha * 512), int(alpha * 512), stride=1, kernel_size=1)
-                for _ in range(5)
+                block for _ in range(5) for block in [
+                    DepthwiseConvDecBlock(int(alpha * 512), int(alpha * 512), stride=1),
+                    ConvDecBlock(int(alpha * 512), int(alpha * 512), stride=1, kernel_size=1)
+                ]
             ],
             ConvDecBlock(int(alpha * 512), int(alpha * 256), stride=1, kernel_size=1),
         )
@@ -261,7 +263,7 @@ class MobileNetDec(torch.nn.Module):
             DepthwiseConvDecBlock(int(alpha * 32), int(alpha * 32), stride=1),
         )
 
-        self.block0 = ConvDecBlock(output_dim[0], int(32 * alpha), stride=2)
+        self.block0 = ConvDecBlock(int(alpha * 32), output_shape[0], stride=2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         y = self.head(x)

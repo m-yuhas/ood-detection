@@ -6,7 +6,7 @@ import os
 
 class OodDataModule(pytorch_lightning.LightningDataModule):
 
-    def __init__(self, train_path, val_path, test_path, predict_path, batch_size=32):
+    def __init__(self, train_path, val_path, test_path, resize, batch_size=32):
         super().__init__()
         self.save_hyperparameters()
 
@@ -15,7 +15,7 @@ class OodDataModule(pytorch_lightning.LightningDataModule):
             root=self.hparams.train_path,
             transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
-                torchvision.transforms.Resize((224, 224), antialias=False)
+                torchvision.transforms.Resize(self.hparams.resize, antialias=False)
             ])
         )
         return torch.utils.data.DataLoader(
@@ -30,7 +30,7 @@ class OodDataModule(pytorch_lightning.LightningDataModule):
             root=self.hparams.val_path,
             transform=torchvision.transforms.Compose([
                 torchvision.transforms.ToTensor(),
-                torchvision.transforms.Resize((224, 224), antialias=False)
+                torchvision.transforms.Resize(self.hparams.resize, antialias=False)
             ])
         )
         return torch.utils.data.DataLoader(
@@ -45,7 +45,7 @@ class OodDataModule(pytorch_lightning.LightningDataModule):
                 root=self.hparams.test_path,
                 transform=torchvision.transforms.Compose([
                     torchvision.transforms.ToTensor(),
-                    torchvision.transforms.Resize((224, 224), antialias=False)
+                    torchvision.transforms.Resize(self.hparams.resize, antialias=False)
                 ])
             ),
             batch_size=self.hparams.batch_size,
@@ -55,10 +55,10 @@ class OodDataModule(pytorch_lightning.LightningDataModule):
     def predict_dataloader(self):
         return torch.utils.data.DataLoader(
             torchvision.datasets.ImageFolder(
-                root=self.hparams.predict_path,
+                root=self.hparams.test_path,
                 transform=torchvision.transforms.Compose([
                     torchvision.transforms.ToTensor(),
-                    torchvision.transforms.Resize((224, 224), antialias=False)
+                    torchvision.transforms.Resize(self.hparams.resize, antialias=False)
                 ])
             ),
             batch_size=self.hparams.batch_size,
