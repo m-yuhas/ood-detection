@@ -1,4 +1,4 @@
 dataset type: image
-train path: /mnt/sdb/Datasets/GTSRB/test
-val path: /mnt/sdb/Datasets/GTSRB/val
-test path: /mnt/sdb/Dataset/GTSRB/test
+train path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_train_set
+val path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_val_set
+test path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_val_set

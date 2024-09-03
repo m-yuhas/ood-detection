@@ -6,12 +6,12 @@ backbone: mobilenet
 model hyperparameters:
   alpha: 0.25
   input_dim: [3, 128, 128]
-  n_latent: 30
+  n_latent: 500
 
 training hyperparameters:
-  beta: 1.0
+  beta: 2.0
   batch size: 16
-  epochs: 25
+  epochs: 100
   learning rate: 0.00001
   optimizer: adam
 

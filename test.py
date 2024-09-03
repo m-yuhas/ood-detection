@@ -6,8 +6,8 @@ import numpy
 from sklearn.metrics import roc_auc_score, precision_recall_curve
 
 from lightning_modules.betavae import BetaVae
-from models.vggnet import VggnetWsvae, VggnetVae
-from models.resnet import Resnet18Enc, Resnet34Enc
+from models.resnet import ResnetEnc, ResnetDec
+from models.mobilenet import MobileNetEnc, MobileNetDec
 from data.image_data import OodDataModule
 
 if __name__ == '__main__':
@@ -24,9 +24,13 @@ if __name__ == '__main__':
         '--model_name',
         help='file name of *.pt model'
     )
+    parser.add_argument(
+        '--n_latent',
+        help='number of latent dimensions'
+    )
     args = parser.parse_args()
     model = torch.load(args.model_name)
-    data = OodDataModule(args.test_dataset, args.test_dataset, args.test_dataset, args.test_dataset, batch_size=int(args.batch)) 
+    data = OodDataModule(args.test_dataset, args.test_dataset, args.test_dataset, (128, 128), batch_size=int(args.batch)) 
     trainer = pytorch_lightning.Trainer(
         accelerator='gpu' if torch.cuda.is_available else 'cpu',
         devices=1,
@@ -37,7 +41,7 @@ if __name__ == '__main__':
         enable_checkpointing=False,
     )
     num_imgs = len(data.val_dataloader().dataset)
-    ood_score = numpy.zeros((num_imgs, 500))
+    ood_score = numpy.zeros((num_imgs, int(args.n_latent)))
     gt = numpy.zeros(num_imgs)
     results = trainer.predict(model, datamodule=data)
     for idx, r in enumerate(results):
@@ -47,7 +51,7 @@ if __name__ == '__main__':
     gt[gt >= 1] = 1
     best_idx = 0
     best_auroc = 0
-    for idx in range(500):
+    for idx in range(int(args.n_latent)):
         auroc = roc_auc_score(gt, ood_score[:, idx])
         #print(f'AUROC: {auroc}')
         if auroc > best_auroc:
