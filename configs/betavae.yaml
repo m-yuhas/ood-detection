@@ -2,11 +2,15 @@
 seed: 0
 
 detection model: betavae
-backbone: mobilenet
+backbone: lenet
 model hyperparameters:
-  alpha: 0.25
-  input_dim: [3, 128, 128]
-  n_latent: 500
+  n_latent: 5
+  input_dim: [3, 28, 28]
+#backbone: mobilenet
+#model hyperparameters:
+#  alpha: 0.25
+#  input_dim: [3, 128, 128]
+#  n_latent: 500
 
 training hyperparameters:
   beta: 2.0

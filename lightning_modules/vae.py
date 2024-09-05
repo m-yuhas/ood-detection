@@ -2,11 +2,11 @@ import torch
 import pytorch_lightning
 
 
-class BetaVae(pytorch_lightning.LightningModule):
+class Vae(pytorch_lightning.LightningModule):
 
-    def __init__(self, encoder, decoder, beta=1, learning_rate=1e-5):
+    def __init__(self, encoder, decoder, learning_rate=1e-5):
         super().__init__()
-        self.beta = beta
+        self.n_latent = 500
         self.learning_rate = learning_rate
         self.encoder = encoder
         self.decoder = decoder
@@ -26,7 +26,7 @@ class BetaVae(pytorch_lightning.LightningModule):
     def elbo_loss(self, batch):
         x, _ = batch
         x_hat, mu, logvar = self.forward(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.decoder.n_latent
+        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
         mse_loss = torch.nn.functional.mse_loss(x_hat, x, reduction='mean')
         return mse_loss + self.beta * kl_loss
 
@@ -43,7 +43,7 @@ class BetaVae(pytorch_lightning.LightningModule):
     def test_step(self, test_batch, batch_idx):
         x, _ = test_batch
         x_hat, mu, logvar = self.forward(x)
-        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.decoder.n_latent
+        kl_loss = 0.5 * torch.sum(mu.pow(2) + logvar.exp() - logvar - 1) / self.n_latent
         self.log('test_loss', kl_loss)
         return kl_loss
 

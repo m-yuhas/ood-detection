@@ -1,4 +1,12 @@
-dataset type: image
-train path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_train_set
-val path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_val_set
-test path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_val_set
+#dataset type: image
+#train path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_train_set
+#val path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_val_set
+#test path: /mnt/7fad4474-58d9-48d4-a565-db321fc0cca5/michaelj004/IDD/IDD_Detection/ood_val_set
+dataset type: coco-like
+root: /mnt/sdb/Datasets/KITTI
+train: [sunny]
+train_json: kitti_train_annotations.json
+val: [sunny]
+val_json: kitti_val_annotations.json
+test: [sunny]
+test_json: kitti_test_annotations.json

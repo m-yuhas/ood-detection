@@ -1,14 +1,21 @@
+"""Train an OOD detector."""
+
 import argparse
+import random
+
+
 import pytorch_lightning
 import torch
-import random
 import yaml
+
 
 from models.vggnet import VggnetEnc, VggnetDec
 from models.resnet import ResnetEnc, ResnetDec
 from models.mobilenet import MobileNetEnc, MobileNetDec
+from models.lenet import ConvNetEnc, ConvNetDec, LENET4
 from lightning_modules.betavae import BetaVae
 from data.image_data import OodDataModule
+from data.coco_like_data import CocoLikeDataModule
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Train an OOD detector')
@@ -76,6 +83,17 @@ if __name__ == '__main__':
     elif backbone =='vggnet':
         encoder = VggnetEnc(**model_config['model hyperparameters'])
         decoder = VggnetDec(**model_config['model hyperparameters'])
+    elif backbone == 'lenet':
+        encoder = ConvNetEnc(
+            LENET4,
+            model_config['model hyperparameters']['n_latent'] * 2,
+            model_config['model hyperparameters']['input_dim']
+        )
+        decoder = ConvNetDec(
+            LENET4,
+            encoder.block_outputs,
+            model_config['model hyperparameters']['n_latent'],
+        )
     else:
         raise ValueError(f'Unsupported backbone: {backbone}')
         exit(2)
@@ -97,7 +115,19 @@ if __name__ == '__main__':
             data_config['test path'],
             resize=model_config['model hyperparameters']['input_dim'][1:],
             batch_size=model_config['training hyperparameters']['batch size']
-        ) 
+        )
+    elif data_config['dataset type'] == 'coco-like':
+        data = CocoLikeDataModule(
+            root=data_config['root'],
+            train=data_config['train'],
+            train_json=data_config['train_json'],
+            val=data_config['val'],
+            val_json=data_config['val_json'],
+            test=data_config['test'],
+            test_json=data_config['test_json'],
+            shape=model_config['model hyperparameters']['input_dim'][1:],
+            batch_size=model_config['training hyperparameters']['batch size']
+        )
     checkpoint_callback = pytorch_lightning.callbacks.ModelCheckpoint(
         save_top_k=1,
         monitor='val_loss',
