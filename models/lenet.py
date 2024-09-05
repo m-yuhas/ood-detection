@@ -69,6 +69,7 @@ class ConvNetEncBlock(torch.nn.Module):
             dilation=kwargs['conv_dilation'],
             stride=kwargs['conv_stride']
         )
+        self.out_channels = out_channels
         self.bn = torch.nn.BatchNorm2d(out_channels)
         self.act = kwargs['activation']
         if kwargs['pool_kernel'] == 1:
@@ -80,22 +81,28 @@ class ConvNetEncBlock(torch.nn.Module):
                 padding=kwargs['pool_pad'],
                 dilation=kwargs['pool_dilation']
             )
-        conv_out_dim = lambda x : math.floor(
+        self.pool_kernel = kwargs['pool_kernel']
+        self.pool_stride = kwargs['pool_stride']
+        self.conv_pad = kwargs['conv_pad']
+        self.conv_dilation = kwargs['conv_dilation']
+        self.conv_kernel = kwargs['conv_kernel']
+        
+    def conv_out_dim(self, x):
+        return math.floor(
             x + \
-            2 * kwargs['conv_pad'] - \
-            kwargs['conv_dilation'] * (kwargs['conv_kernel'] - 1) \
+            2 * self.conv_pad - \
+            self.conv_dilation * (self.conv_kernel - 1) \
         )
-        pool_out_dim = lambda x : math.floor(
-            (x - (kwargs['pool_kernel'] - 1) - 1) / kwargs['pool_stride'] + 1
-        )
-        self.get_output_size = lambda c, h, w : (
-            out_channels,
-            pool_out_dim(conv_out_dim(h)),
-            pool_out_dim(conv_out_dim(w)),
+        
+    def pool_out_dim(self, x):
+        return math.floor(
+            (x - (self.pool_kernel - 1) - 1) / self.pool_stride + 1
         )
 
+    def get_output_size(self, c, h, w):
+        return self.out_channels, self.pool_out_dim(self.conv_out_dim(h)), self.pool_out_dim(self.conv_out_dim(w))
+
     def forward(self, x):
-        print(x.shape)
         return self.pool(self.act(self.bn(self.conv(x))))
 
 
@@ -196,8 +203,6 @@ class ConvNetDec(torch.nn.Module):
         self.conv_blocks = torch.nn.Sequential()
         layers = layers[::-1][last_idx - 2:]
         block_outputs = block_outputs[last_idx:]
-        print(layers)
-        print(block_outputs)
         for idx, (block, input_shape) in enumerate(zip(layers, block_outputs[:-1])):
             block['unpooling'] = (input_shape[1], input_shape[2])
             block.pop('out_channels')
@@ -207,7 +212,6 @@ class ConvNetDec(torch.nn.Module):
                 block_outputs[idx + 1][0],
                 **block
             ))
-        print(self.conv_blocks)
 
     def forward(self, x):
         x = self.fc_blocks(x)
