@@ -73,8 +73,8 @@ class CocoLikeDataModule(pytorch_lightning.LightningDataModule):
             drop_last=True)
 
     def test_dataloader(self):
-        return CocoLikeDataset(
-            torchvision.datasets.ImageFolder(
+        return torch.utils.data.DataLoader(
+            CocoLikeDataset(
                 root=self.hparams.root,
                 subdirs=self.hparams.test,
                 json_f=self.hparams.test_json,
@@ -88,8 +88,8 @@ class CocoLikeDataModule(pytorch_lightning.LightningDataModule):
             drop_last=True)
 
     def predict_dataloader(self):
-        return CocoLikeDataset(
-            torchvision.datasets.ImageFolder(
+        return torch.utils.data.DataLoader(
+            CocoLikeDataset(
                 root=self.hparams.root,
                 subdirs=self.hparams.test,
                 json_f=self.hparams.test_json,
