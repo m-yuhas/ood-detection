@@ -9,6 +9,7 @@ from lightning_modules.betavae import BetaVae
 from models.resnet import ResnetEnc, ResnetDec
 from models.mobilenet import MobileNetEnc, MobileNetDec
 from data.image_data import OodDataModule
+from data.coco_like_data import CocoLikeDataModule
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser('Test an OOD Detector')
@@ -30,7 +31,18 @@ if __name__ == '__main__':
     )
     args = parser.parse_args()
     model = torch.load(args.model_name)
-    data = OodDataModule(args.test_dataset, args.test_dataset, args.test_dataset, (128, 128), batch_size=int(args.batch)) 
+    #data = OodDataModule(args.test_dataset, args.test_dataset, args.test_dataset, (128, 128), batch_size=int(args.batch))
+    data = CocoLikeDataModule(
+        root='/mnt/sdb/Datasets/IDD/IDD_Detection',
+        train=['JPEGImages'],
+        train_json='idd_train_annotations.json',
+        val=['JPEGImages'],
+        val_json='idd_val_annotations.json',
+        test=['JPEGImages', 'JPEGdark2'],
+        test_json='idd_test_annotations.json',
+        shape=(28, 28),
+        batch_size=int(args.batch)
+    ) 
     trainer = pytorch_lightning.Trainer(
         accelerator='gpu' if torch.cuda.is_available else 'cpu',
         devices=1,
@@ -40,7 +52,7 @@ if __name__ == '__main__':
         logger=pytorch_lightning.loggers.CSVLogger("logs", name=f'test_{args.model_name}'),
         enable_checkpointing=False,
     )
-    num_imgs = len(data.val_dataloader().dataset)
+    num_imgs = len(data.predict_dataloader().dataset)
     ood_score = numpy.zeros((num_imgs, int(args.n_latent)))
     gt = numpy.zeros(num_imgs)
     results = trainer.predict(model, datamodule=data)
