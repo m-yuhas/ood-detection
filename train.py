@@ -12,8 +12,9 @@ import yaml
 from models.vggnet import VggnetEnc, VggnetDec
 from models.resnet import ResnetEnc, ResnetDec
 from models.mobilenet import MobileNetEnc, MobileNetDec
-from models.lenet import ConvNetEnc, ConvNetDec, LENET4
+from models.lenet import ConvNetEnc, ConvNetDec, LENET4, CUSTOM4LAYER, CUSTOM3LAYER
 from lightning_modules.betavae import BetaVae
+from lightning_modules.wsvae import WeaklySupervisedVae
 from data.image_data import OodDataModule
 from data.coco_like_data import CocoLikeDataModule
 
@@ -78,8 +79,16 @@ if __name__ == '__main__':
             output_shape=model_config['model hyperparameters']['input_dim'],
         )
     elif backbone == 'resnet':
-        encoder = ResnetEnc(**model_config['model hyperparamers'])
-        decoder = ResnetDec(**model_config['model hyperparameters'])
+        encoder = ResnetEnc(
+            layers=model_config['model hyperparameters']['layers'],
+            n_latent=2 * model_config['model hyperparameters']['n_latent'],
+            input_dim=model_config['model hyperparameters']['input_dim'],
+        )
+        decoder = ResnetDec(
+            layers=model_config['model hyperparameters']['layers'],
+            n_latent=model_config['model hyperparameters']['n_latent'],
+            input_dim=model_config['model hyperparameters']['input_dim'],
+        )
     elif backbone =='vggnet':
         encoder = VggnetEnc(**model_config['model hyperparameters'])
         decoder = VggnetDec(**model_config['model hyperparameters'])
@@ -94,6 +103,28 @@ if __name__ == '__main__':
             encoder.block_outputs,
             model_config['model hyperparameters']['n_latent'],
         )
+    elif backbone == 'custom4layer':
+        encoder = ConvNetEnc(
+            CUSTOM4LAYER,
+            model_config['model hyperparameters']['n_latent'] * 2,
+            model_config['model hyperparameters']['input_dim']
+        )
+        decoder = ConvNetDec(
+            CUSTOM4LAYER,
+            encoder.block_outputs,
+            model_config['model hyperparameters']['n_latent'],
+        )
+    elif backbone == 'custom3layer':
+        encoder = ConvNetEnc(
+            CUSTOM3LAYER,
+            model_config['model hyperparameters']['n_latent'] * 2,
+            model_config['model hyperparameters']['input_dim']
+        )
+        decoder = ConvNetDec(
+            CUSTOM3LAYER,
+            encoder.block_outputs,
+            model_config['model hyperparameters']['n_latent'],
+        )
     else:
         raise ValueError(f'Unsupported backbone: {backbone}')
         exit(2)
@@ -103,6 +134,15 @@ if __name__ == '__main__':
         model = BetaVae(
             encoder,
             decoder,
+            model_config['training hyperparameters']['beta'],
+            model_config['training hyperparameters']['learning rate'],
+        )
+    elif model_config['detection model'] == 'wsvae':
+        model = WeaklySupervisedVae(
+            encoder,
+            decoder,
+            model_config['training hyperparameters']['generative factors'],
+            model_config['training hyperparameters']['alpha'],
             model_config['training hyperparameters']['beta'],
             model_config['training hyperparameters']['learning rate'],
         )

@@ -168,6 +168,7 @@ class MobileNetEnc(torch.nn.Module):
 
     def __init__(self, alpha=1, n_latent=1000, input_shape=(3,224,224)) -> None:
         super().__init__()
+        self.n_latent = n_latent
         self.block0 = ConvEncBlock(input_shape[0], int(32 * alpha), stride=2)
 
         self.block1 = torch.nn.Sequential(
@@ -223,7 +224,7 @@ class MobileNetEnc(torch.nn.Module):
 class MobileNetDec(torch.nn.Module):
     def __init__(self, alpha=1, n_latent=1000, output_shape=(3,224,224)) -> None:
         super().__init__()
-
+        self.n_latent = n_latent
         self.head = MobilenetDecHead(n_latent, (output_shape[1] // 32, output_shape[2] // 32), int(alpha * 1024))
 
         self.block5 = torch.nn.Sequential(

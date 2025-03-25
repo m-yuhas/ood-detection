@@ -3,6 +3,22 @@ from typing import Callable, Dict, List, Tuple
 import math
 import torch
 
+
+CUSTOM4LAYER = [
+    {'out_channels': 8, 'conv_kernel': 3, 'pool_stride': 2, 'pool_kernel': 2},
+    {'out_channels': 16, 'conv_kernel': 3, 'pool_stride': 2, 'pool_kernel': 2},
+    {'out_channels': 32, 'conv_kernel': 3, 'pool_stride': 2, 'pool_kernel': 2},
+    {'out_channels': 64, 'conv_kernel': 3, 'pool_stride': 2, 'pool_kernel': 2},
+    {'fully_connected': 128},
+]
+
+CUSTOM3LAYER = [
+    {'out_channels': 8, 'conv_kernel': 3, 'pool_stride': 2, 'pool_kernel': 2},
+    {'out_channels': 16, 'conv_kernel': 3, 'pool_stride': 2, 'pool_kernel': 2},
+    {'out_channels': 32, 'conv_kernel': 3, 'pool_stride': 4, 'pool_kernel': 4},
+    {'fully_connected': 128},
+]
+
 LENET1 = [
     {'out_channels': 4},
     {'out_channels': 12},

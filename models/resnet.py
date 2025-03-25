@@ -90,6 +90,7 @@ class ResnetEncSmallBlock(torch.nn.Module):
         y = self.conv2(y)
         y = self.bn_skip(y + self.conv_skip(x))
         y = self.act_skip(y)
+        return y
 
 
 class ResnetEncMandatory(torch.nn.Module):
@@ -269,7 +270,7 @@ class ResnetEnc(torch.nn.Module):
         
         if layers <= 34:
             self.block1 = torch.nn.Sequential(
-                ResnetEncSmallBlock(64, 64, 64, 1) for _ in range({18: 2, 34: 3}[layers])
+                *[ResnetEncSmallBlock(64, 64, 1) for _ in range({18: 2, 34: 3}[layers])]
             )
             self.block2 = torch.nn.Sequential(
                 ResnetEncSmallBlock(64, 128, 2),
@@ -320,10 +321,11 @@ class ResnetDec(torch.nn.Module):
 
     def __init__(self, layers: int=50, n_latent=1000, input_dim=(3, 244, 224), projection_policy=None) -> None:
         super().__init__()
+        self.n_latent = n_latent
         if layers not in [18, 34, 50, 101, 152]:
             raise('Invalid number of layers for a ResNet (valid: 18, 34, 50, 101, 152).')
 
-        self.head = ResnetDecHead(n_latent, [d // 32 for d in input_dim[1:]], 512 if layers <= 34 else 2048, n_latent)
+        self.head = ResnetDecHead(n_latent, [d // 32 for d in input_dim[1:]], 512 if layers <= 34 else 2048)
 
         if layers <= 34:
             self.block4 = torch.nn.Sequential(
@@ -339,7 +341,7 @@ class ResnetDec(torch.nn.Module):
                 ResnetDecSmallBlock(128, 64, 2),
             )
             self.block1 = torch.nn.Sequential(
-                ResnetDecSmallBlock(64, 64, 1) for _ in range({18: 2, 34: 3}[layers])
+                *[ResnetDecSmallBlock(64, 64, 1) for _ in range({18: 2, 34: 3}[layers])]
             )
         else:
             self.block4 = torch.nn.Sequential(
